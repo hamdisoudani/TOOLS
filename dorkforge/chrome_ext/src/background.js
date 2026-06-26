@@ -122,21 +122,36 @@ function filterUrls(rawUrls, settings) {
       const parsed = new URL(u);
       // Strip hash
       parsed.hash = '';
-      // Normalize host
+      // Normalize host (lowercase)
       parsed.hostname = parsed.hostname.toLowerCase();
       clean = parsed.toString();
     } catch (e) {
       continue;  // skip malformed
     }
 
-    // dedup
-    if (seen.has(clean)) continue;
-    seen.add(clean);
+    // HTML-entity decode (Bing wraps & as &amp; in cite tags sometimes)
+    clean = clean.replace(/&amp;/g, '&').replace(/&#38;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
-    // extension filter
+    // Build a dedup key: lowercase path + sorted lowercase query keys
+    let dedupKey;
+    try {
+      const p = new URL(clean);
+      const pathLower = p.pathname.toLowerCase();
+      const params = Array.from(p.searchParams.entries())
+        .map(([k, v]) => [k.toLowerCase(), v])
+        .sort((a, b) => a[0].localeCompare(b[0]));
+      const queryNorm = params.map(([k, v]) => `${k}=${v}`).join('&');
+      dedupKey = `${p.hostname}${pathLower}?${queryNorm}`;
+    } catch (e) {
+      dedupKey = clean.toLowerCase();
+    }
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+
+    // extension filter (case-insensitive on path)
     if (settings.extensions_filter && settings.extensions_filter.length) {
       const path = (() => { try { return new URL(clean).pathname.toLowerCase(); } catch (e) { return ''; } })();
-      const hasExt = settings.extensions_filter.some((ext) => path.endsWith('.' + ext));
+      const hasExt = settings.extensions_filter.some((ext) => path.endsWith('.' + ext.toLowerCase()));
       if (!hasExt) continue;
     }
 

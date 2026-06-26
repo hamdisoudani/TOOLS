@@ -41,7 +41,9 @@
 
   function tryExtract() {
     if (sent) return;
-    const urls = extractUrls();
+    const rawUrls = extractUrls();
+    // Decode HTML entities on raw URLs (cite tags often have &amp;)
+    const urls = rawUrls.map(decodeEntities).filter(Boolean);
     if (urls.length === 0) return;
 
     sent = true;
@@ -92,13 +94,26 @@
     try {
       if (ENGINE === 'google') {
         // Modern Google result anchors (2024-2026 layout)
-        document.querySelectorAll('div.g a[href^="http"], div[jscontroller] a[href^="http"]').forEach((a) => {
+        // Selector strategy: any anchor inside a result block, with several layout fallbacks
+        const sel = [
+          'div.g a[href^="http"]:not([role="button"])',
+          'div.yuRUbf > a[href^="http"]',
+          'div[jscontroller] a[href^="http"]:not([role="button"])',
+          'h3 + div a[href^="http"]',
+          'a[data-ved][href^="http"]:not([role="button"])',
+          'div.kCrYT > a[href^="http"]',
+          'div.MUxGbd a[href^="http"]',
+          'div.v5yQqb a[href^="http"]',
+          'div.ZINbbc a[href^="http"]'
+        ].join(', ');
+        document.querySelectorAll(sel).forEach((a) => {
           const href = a.href;
           if (isResultHref(href)) out.add(href);
         });
-        // Citation-style URLs (used in newer layouts)
-        document.querySelectorAll('cite, [role="text"]').forEach((c) => {
-          // Not a URL, skip
+        // Fallback: cite tags (sometimes wrap the display URL)
+        document.querySelectorAll('cite').forEach((c) => {
+          const u = c.textContent.trim();
+          if (u) out.add(ensureScheme(decodeEntities(u)));
         });
       } else if (ENGINE === 'bing') {
         document.querySelectorAll('li.b_algo h2 a[href], li.b_algo a.tilk[href]').forEach((a) => {
@@ -147,5 +162,19 @@
   function ensureScheme(u) {
     if (/^https?:\/\//i.test(u)) return u;
     return 'http://' + u;
+  }
+
+  // Decode HTML entities that often appear in cite tags / textContent of result snippets
+  function decodeEntities(s) {
+    if (!s) return s;
+    return s
+      .replace(/&amp;/g, '&')
+      .replace(/&#38;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      .trim();
   }
 })();
