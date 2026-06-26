@@ -1,0 +1,10 @@
+{
+  "raw": 292,
+  "normalized": 292,
+  "after_spam": 292,
+  "unique": 291,
+  "by_tier": {
+    "tier_global": 12,
+    "tier_other": 279
+  }
+}
